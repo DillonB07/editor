@@ -43,22 +43,22 @@ class BINARY(Expression):
         op = self.operator.type
 
         # check to ensure both left_value and right_value  are not None
-        if left_value  == None or right_value == None:
+        if left_value is None or right_value is None:
             raise RuntimeError([self.line, f"the left_value or the right_value  expression of the {self.operator.lexeme} operator is empty"])
 
         # check for valid number operations
         if util.isNumber( left_value ) and not util.isNumber(right_value ) or \
-           not util.isNumber(left_value ) and util.isNumber(right_value ):
+               not util.isNumber(left_value ) and util.isNumber(right_value ):
 
             raise RuntimeError([self.line, f"type mismatch on operator '{self.operator.lexeme}', both expressions need to be numbers"])
 
         # check for valid string operations
         if util.isString(left_value ) and util.isString(right_value ) and \
-            op in [TT.PLUS, TT.MINUS, TT.STAR, TT.SLASH, TT.DIV, TT.MOD]:
+                op in [TT.PLUS, TT.MINUS, TT.STAR, TT.SLASH, TT.DIV, TT.MOD]:
 
             raise RuntimeError([self.line, f"invalid string operator '{self.operator.lexeme}'"])
 
-        if  op == TT.PLUS:
+        if op == TT.PLUS:
             return left_value  + right_value
 
         elif op  == TT.AMPERSAND:
@@ -67,7 +67,9 @@ class BINARY(Expression):
                 return left_value + right_value
 
             else:
-                raise RuntimeError([self.line, f"String concatenation '&' operates on STRING only"])
+                raise RuntimeError(
+                    [self.line, "String concatenation '&' operates on STRING only"]
+                )
 
         elif op  == TT.MINUS:
             return left_value - right_value
@@ -83,25 +85,25 @@ class BINARY(Expression):
             if type(left_value) == bool and type(right_value) == bool:
                 return left_value and right_value
             else:
-                raise RuntimeError([self.line, f"AND can only be applied to boolean types"])
+                raise RuntimeError([self.line, "AND can only be applied to boolean types"])
 
         elif op == TT.OR:
             if type(left_value) == bool and type(right_value) == bool:
                 return left_value or right_value
             else:
-                raise RuntimeError([self.line, f"OR can only be applied to boolean types"])
+                raise RuntimeError([self.line, "OR can only be applied to boolean types"])
 
         elif op  == TT.DIV:
             if util.isNumber(left_value) and util.isNumber(right_value ):
                 return left_value // right_value
             else:
-                raise RuntimeError([self.line, f"DIV operates on numbers ONLY"])
+                raise RuntimeError([self.line, "DIV operates on numbers ONLY"])
 
         elif op == TT.MOD:
             if util.isNumber( left_value ) and util.isNumber( right_value ):
                 return left_value % right_value
             else:
-                raise RuntimeError([self.line, f"MOD operates on numbers ONLY"])
+                raise RuntimeError([self.line, "MOD operates on numbers ONLY"])
 
         elif op  == TT.GREATER_EQUAL:
             return left_value >= right_value
@@ -133,7 +135,7 @@ class LITERAL(Expression):
         self.line = line
 
     async def evaluate(self):
-        if self.expression == None:
+        if self.expression is None:
             raise RuntimeError([self.line, "missing expression in literal ()"])
 
         return self.expression
@@ -144,7 +146,7 @@ class GROUPING(Expression):
         self.line = line
 
     async def evaluate(self):
-        if self.expression == None:
+        if self.expression is None:
             raise RuntimeError([self.line, "missing expression in group ()"])
         return await self.expression.evaluate()
 
@@ -172,10 +174,7 @@ class ARRAY(Expression):
         symbol = environ.get_variable(self.name)
 
         index1 = await self.indices[0].evaluate()
-        index2 = None
-        if not symbol.is1d:
-            index2 = await self.indices[1].evaluate()
-
+        index2 = await self.indices[1].evaluate() if not symbol.is1d else None
         return symbol.get_value(self.line, index1, index2)
 
 ### Currently being worked on
@@ -189,10 +188,7 @@ class ARRAY_UDT(ARRAY):
         symbol = environ.get_variable(self.name)
 
         index1 = await self.indices[0].evaluate()
-        index2 = None
-        if not symbol.is1d:
-            index2 = await self.indices[1].evaluate()
-
+        index2 = await self.indices[1].evaluate() if not symbol.is1d else None
         return symbol.get_value(self.line, index1, index2)
 ### Currently being worked on
 
@@ -212,8 +208,8 @@ class FUNCTION(Expression):
                 raise RuntimeError([self.line, f"INT() requires 1 argument, it received {len(self.args)}"])
 
             val = self.visitNode(self.args[0])
-            if not (type (val) == int or type(val) == float):
-                raise RuntimeError([self.line, f"INT() requires a an INTEGER or REAL argument"])
+            if type(val) not in [int, float]:
+                raise RuntimeError([self.line, "INT() requires a an INTEGER or REAL argument"])
 
             return int(val)
 
@@ -229,7 +225,7 @@ class FUNCTION(Expression):
                 return randint(start, end)
 
             else:
-                raise RuntimeError([self.line, f"RAND() requires 2 integer arguments"])
+                raise RuntimeError([self.line, "RAND() requires 2 integer arguments"])
 
         elif self.name == "RIGHT":
             if len(self.args) != 2:
@@ -270,23 +266,21 @@ class FUNCTION(Expression):
             start = await self.args[1].evaluate()
             x     = await self.args[2].evaluate() - 1
 
-            if type(start) == int and type(x) == int:
+            if type(start) != int or type(x) != int:
+                raise RuntimeError([self.line, "MID() requires 2 integer arguments"])
 
-                # Ensure start and x are valid
-                if start > 0 and start + x <= len(this_string):
-                    return this_string[start-1:start+x]
-                else:
-                    raise RuntimeError([self.line, f"MID() arguments are invalid. Ensure start index > 0, and start + length <= LENGTH(\"{this_string}\")"])
+            # Ensure start and x are valid
+            if start > 0 and start + x <= len(this_string):
+                return this_string[start-1:start+x]
             else:
-                raise RuntimeError([self.line, f"MID() requires 2 integer arguments"])
-
+                raise RuntimeError([self.line, f"MID() arguments are invalid. Ensure start index > 0, and start + length <= LENGTH(\"{this_string}\")"])
         elif self.name == "UCASE":
             if len(self.args) != 1:
                 raise RuntimeError([self.line, f"UCASE() function requires 1 argument, it received {len(self.args)}"])
 
             char  = await self.args[0].evaluate()
             if not util.isChar(char):
-                raise RuntimeError([self.line, f"UCASE() argument should be of type CHAR"])
+                raise RuntimeError([self.line, "UCASE() argument should be of type CHAR"])
 
             return char.upper()
 
@@ -296,7 +290,7 @@ class FUNCTION(Expression):
 
             char  = await self.args[0].evaluate()
             if not util.isChar(char):
-                raise RuntimeError([self.line, f"LCASE() argument should be of type CHAR"])
+                raise RuntimeError([self.line, "LCASE() argument should be of type CHAR"])
 
             return char.lower()
 
@@ -321,7 +315,6 @@ class FUNCTION(Expression):
             if command.upper() == "DUMP GLOBALS":
                 environ.dump_global_variables()
 
-        # User defined function
         elif environ.symbol_defined(self.name): # Check if this is a user defined function
             symbol = environ.get_variable(self.name)
 
@@ -353,7 +346,7 @@ class FUNCTION(Expression):
             except util.Return as r:
                 return_val = r.args[0]
 
-            if return_val == None:
+            if return_val is None:
                 raise RuntimeError([self.line, f"Function '{self.name}()' returned without a value"])
 
             environ.pop()

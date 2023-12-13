@@ -36,13 +36,18 @@ def isType(expr):
 
 def check_type(val, vtype, line):
     
-    match =  isString(val) and vtype == TT.STRING   or   \
-             isReal(val) and vtype == TT.REAL or   \
-             isChar(val) and vtype == TT.CHAR or   \
-             isInteger(val) and vtype == TT.INTEGER or   \
-             isBoolean(val) and vtype == TT.BOOLEAN
-    
-    return match
+    return (
+        isString(val)
+        and vtype == TT.STRING
+        or isReal(val)
+        and vtype == TT.REAL
+        or isChar(val)
+        and vtype == TT.CHAR
+        or isInteger(val)
+        and vtype == TT.INTEGER
+        or isBoolean(val)
+        and vtype == TT.BOOLEAN
+    )
 
 
 class Return(Exception):

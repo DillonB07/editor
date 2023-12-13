@@ -35,7 +35,9 @@ async def run_code():
 
 def prepare():
     file_name = document.querySelector(".active .file-name").innerText
-    document.querySelectorAll(".console .prompt")[-1].innerText += " ps2 " + file_name
+    document.querySelectorAll(".console .prompt")[
+        -1
+    ].innerText += f" ps2 {file_name}"
     document.querySelector("#run-button").innerText = "􀛷"
 
 

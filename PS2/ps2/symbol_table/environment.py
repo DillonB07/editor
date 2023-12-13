@@ -11,13 +11,13 @@ class Environment:
     def __init__(self):
         self.variables = {}
 
-    def push(env):
-        Environment.scopes.insert(0, env)
+    def push(self):
+        Environment.scopes.insert(0, self)
 
     def pop():
         return Environment.scopes.pop(0)
 
-    def add_variable(symbol):
+    def add_variable(self):
 
         ## DEBUG ##
         #print(symbol)
@@ -27,12 +27,10 @@ class Environment:
         if len(Environment.scopes) != 0:
             scope = Environment.scopes[0]
 
-        if symbol.vname not in scope:
-            scope[symbol.vname] = symbol
-        else:
-            pass # symbol was previously defined ... skip
+        if self.vname not in scope:
+            scope[self.vname] = self
 
-    def get_variable(vname):
+    def get_variable(self):
 
         symbol = None
 
@@ -40,23 +38,22 @@ class Environment:
             for i in range(len(Environment.scopes)):
                 scope = Environment.scopes[i]
 
-                if vname in scope:
-                    symbol = scope[vname]
+                if self in scope:
+                    symbol = scope[self]
                     break
 
-            if symbol == None and vname in Environment.global_variables: # check to see if it's a global
-                symbol = Environment.global_variables[vname]
+            if symbol is None and self in Environment.global_variables: # check to see if it's a global
+                symbol = Environment.global_variables[self]
 
-        else:
-            if vname in Environment.global_variables:
-                symbol = Environment.global_variables[vname]
+        elif self in Environment.global_variables:
+            symbol = Environment.global_variables[self]
 
-        if symbol == None:
-            raise NameError(f"Symbol '{vname}' not found")
+        if symbol is None:
+            raise NameError(f"Symbol '{self}' not found")
 
         return symbol # Will return None if not defined
 
-    def remove_variable(vname):
+    def remove_variable(self):
 
         found = False
 
@@ -64,31 +61,28 @@ class Environment:
             for i in range(len(Environment.scopes)):
                 scope = Environment.scopes[i]
 
-                if vname in scope:
-                    del scope[vname]
+                if self in scope:
+                    del scope[self]
                     found = True
                     break
 
-            if not found and vname in Environment.global_variables: # check to see if it's a global
-                del Environment.global_variables[vname]
+            if not found and self in Environment.global_variables: # check to see if it's a global
+                del Environment.global_variables[self]
 
-        else:
-            if vname in Environment.global_variables:
-                del Environment.global_variables[vname]
-                found = True
+        elif self in Environment.global_variables:
+            del Environment.global_variables[self]
+            found = True
 
         if not found:
-            raise NameError(f"Symbol '{vname}' not found")
+            raise NameError(f"Symbol '{self}' not found")
 
-    def symbol_defined(vname):
+    def symbol_defined(self):
 
-        scope = Environment.global_variables
-        for e in Environment.scopes:
-            if vname in e:
-                scope = e
-                break
-
-        return vname in scope
+        scope = next(
+            (e for e in Environment.scopes if self in e),
+            Environment.global_variables,
+        )
+        return self in scope
 
     def reset():
 
@@ -118,12 +112,10 @@ class Symbol:
 
     def type_match(self, val, line):
 
-        match = utilities.check_type(val, self.vtype, line)
-
-        if not match:
+        if match := utilities.check_type(val, self.vtype, line):
+            return True
+        else:
             raise RuntimeError([line, f"Invalid assignment, cannot assign a {utilities.isType(val)} to a {self.vtype.type}"])
-
-        return True
 
 
     def set_value(self, val, line):
@@ -148,69 +140,64 @@ class Array_Symbol(Symbol):
         return f"Array symbol name={self.vname} | type={self.vtype} | dimensions={self.dimensions} | value={self.value}"
 
     def in_range(self, index, dim):
-        value = index >= dim[0] and index <= dim[1]
-        return value
+        return index >= dim[0] and index <= dim[1]
 
     def set_value(self, line, value, index1, index2=None):
         if self.is1d:
-            if index2 != None:
+            if index2 is not None:
                 raise RuntimeError([line , f"{self.vname} is a 1-D array, but two indexes were given {index1}, {index2}"])
-            else:
-                if not self.in_range(index1, self.dimensions[0]):
-                    raise RuntimeError([line , f"{self.vname} index {index1} out of range"])
+            if not self.in_range(index1, self.dimensions[0]):
+                raise RuntimeError([line , f"{self.vname} index {index1} out of range"])
 
-                if self.type_match(value, line):
-                    self.value[index1-self.dimensions[0][0]] = value
+            if self.type_match(value, line):
+                self.value[index1-self.dimensions[0][0]] = value
 
-        else: # 2-D array
-            if index2 == None:
-                raise RuntimeError([line , f"Array {self.vname} is a 2-D array, but only 1 index was given {index1}"])
+        elif index2 is None:
+            raise RuntimeError([line , f"Array {self.vname} is a 2-D array, but only 1 index was given {index1}"])
 
-            else:
-                if not self.in_range(index1, self.dimensions[0]):
-                    raise RuntimeError([line , f"Array {self.vname}[{index1}] {index1} out of range"])
+        else:
+            if not self.in_range(index1, self.dimensions[0]):
+                raise RuntimeError([line , f"Array {self.vname}[{index1}] {index1} out of range"])
 
-                elif not self.in_range(index2, self.dimensions[1]):
-                    raise RuntimeError([line , f"Array {self.vname}[{index1}][{index2}] index {index2} out of range"])
+            elif not self.in_range(index2, self.dimensions[1]):
+                raise RuntimeError([line , f"Array {self.vname}[{index1}][{index2}] index {index2} out of range"])
 
-                i1 = index1-self.dimensions[0][0]
-                i2 = index2-self.dimensions[1][0]
+            i1 = index1-self.dimensions[0][0]
+            i2 = index2-self.dimensions[1][0]
 
-                if self.type_match(value, line):
-                    self.value[i1][i2] = value
+            if self.type_match(value, line):
+                self.value[i1][i2] = value
 
 
     def get_value(self, line, index1, index2=None):
         if self.is1d:
-            if index2 != None:
+            if index2 is not None:
                 raise RuntimeError([line , f"Array {self.vname} is a 1-D array, but two indexes were given {index1}, {index2}"])
-            else:
-                if not self.in_range(index1, self.dimensions[0]):
-                    raise RuntimeError([line , f"Array {self.vname}[{index1}] {index1} out of range"])
+            if not self.in_range(index1, self.dimensions[0]):
+                raise RuntimeError([line , f"Array {self.vname}[{index1}] {index1} out of range"])
 
-                value = self.value[index1-self.dimensions[0][0]]
-                if value == None:
-                    raise RuntimeError([line, f"Array {self.name}[{index1}] declared, but not value assigned"])
+            value = self.value[index1-self.dimensions[0][0]]
+            if value is None:
+                raise RuntimeError([line, f"Array {self.name}[{index1}] declared, but not value assigned"])
 
-                return  value
+            return  value
 
-        else: # 2-D array
-            if index2 == None:
-                raise RuntimeError([line , f"Array {self.vname} is a 2-D array, but only 1 index was given {index1}"])
+        elif index2 is None:
+            raise RuntimeError([line , f"Array {self.vname} is a 2-D array, but only 1 index was given {index1}"])
 
-            else:
-                if not self.in_range(index1, self.dimensions[0]):
-                    raise RuntimeError([line , f"Array {self.vname}[{index1}] {index1} out of range"])
+        else:
+            if not self.in_range(index1, self.dimensions[0]):
+                raise RuntimeError([line , f"Array {self.vname}[{index1}] {index1} out of range"])
 
-                elif not self.in_range(index2, self.dimensions[1]):
-                    raise RuntimeError([line , f"Array {self.vname}[{index1}][{index2}] {index2} out of range"])
+            elif not self.in_range(index2, self.dimensions[1]):
+                raise RuntimeError([line , f"Array {self.vname}[{index1}][{index2}] {index2} out of range"])
 
-                value = self.value[index1-self.dimensions[0][0]][index2-self.dimensions[1][0]]
+            value = self.value[index1-self.dimensions[0][0]][index2-self.dimensions[1][0]]
 
-                if value == None:
-                    raise RuntimeError([line, f"Array {self.vname}[{index1}][{index2}] declared, but no value assigned"])
+            if value is None:
+                raise RuntimeError([line, f"Array {self.vname}[{index1}][{index2}] declared, but no value assigned"])
 
-                return  value
+            return  value
 
 class File_Symbol(Symbol):
     def __init__(self, name, mode, line):
