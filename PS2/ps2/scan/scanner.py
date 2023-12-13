@@ -97,8 +97,8 @@ class Scanner:
             else:
                 self.addToken(TT.SLASH)
 
-        elif c == " " or c == "\r" or c == "\t":
-          pass
+        elif c in [" ", "\r", "\t"]:
+            pass
 
         elif c == "\n":
             self.line += 1
@@ -106,15 +106,14 @@ class Scanner:
         elif c == '"':
             self.string()
 
+        elif c.isdigit():
+            self.number()
+
+        elif c.isalpha() or c == '_':
+            self.identifier()
+
         else:
-            if c.isdigit():
-                self.number()
-
-            elif c.isalpha() or c == '_':
-                self.identifier()
-
-            else:
-                raise SyntaxError([self.line, f"unrecognised token '{c}'"])
+            raise SyntaxError([self.line, f"unrecognised token '{c}'"])
     
     def match(self, expected):
         if self.isAtEnd():
@@ -143,10 +142,7 @@ class Scanner:
         
 
     def peek(self):
-        if self.isAtEnd(): 
-            return ""
-
-        return self.source[self.current]
+        return "" if self.isAtEnd() else self.source[self.current]
   
     def peekNext(self):
         if self.current + 1 > len(self.source): 
@@ -172,17 +168,16 @@ class Scanner:
 
     def char(self):
         value = ""
-        if not self.isAtEnd():
-            if self.peek() != "'":
-                value = self.peek()
-                self.advance()
-            if self.peek() != "'":
-                raise SyntaxError ([self.line, f"expected ' after {value}"])        
-            else:
-                self.advance()
-        else:
+        if self.isAtEnd():
             raise SyntaxError ([self.line, "unterminated character"])
 
+        if self.peek() != "'":
+            value = self.peek()
+            self.advance()
+        if self.peek() != "'":
+            raise SyntaxError ([self.line, f"expected ' after {value}"])        
+        else:
+            self.advance()
         self.addToken(TT.QUOTE, value)
 
     def number(self):

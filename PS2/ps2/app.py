@@ -32,10 +32,10 @@ class PS2:
         return elem.value
 
 
-    async def print(*args, sep=' ', end='\n', file=None, error=False):
+    async def print(self, sep=' ', end='\n', file=None, error=False):
         span = document.createElement("span")
         span.classList.add("output")
-        span.innerText = " ".join(list(map(str, args))) + end
+        span.innerText = " ".join(list(map(str, self))) + end
 
         if error:
             span.classList.add("error")
@@ -43,28 +43,28 @@ class PS2:
         document.querySelector(".console").appendChild(span)
 
 
-    async def error(message):
+    async def error(self):
         inpt = document.querySelector(".console input")
         if inpt is not None:
             text = inpt.value
             inpt.remove()
             print(text)
 
-        await PS2.print(message, error=True)
+        await PS2.print(self, error=True)
 
     statement.statement.input = input
     statement.statement.print = print
 
-    async def report(line, where, message):
-        if line is None:
+    async def report(self, where, message):
+        if self is None:
             await PS2.error(f"{where} error: {message}")
         else:
-            await PS2.error(f"[line {line}] {where} error: {message}")
+            await PS2.error(f"[line {self}] {where} error: {message}")
 
     # Run Interpretor from a file
-    async def runCode(code):
+    async def runCode(self):
         try:
-            tokens     = Scanner(code).scanTokens()
+            tokens = Scanner(self).scanTokens()
             statements = Parser(tokens).parse()
         except SyntaxError as e:
             await PS2.report(e.msg[0], "Syntax", e.msg[1])

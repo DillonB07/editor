@@ -20,12 +20,11 @@ class Parser:
         return self.tokens[self.current]
 
     def advance(self):
-        if self.current < len(self.tokens):
-            tok = self.tokens[self.current]
-            self.current += 1
-            return tok
-        else:
+        if self.current >= len(self.tokens):
             raise SyntaxError([self.tokens[self.current].line, "Unexpected EOF"])
+        tok = self.tokens[self.current]
+        self.current += 1
+        return tok
 
     def undo(self):
         if self.current > 0:
@@ -60,7 +59,7 @@ class Parser:
             raise SyntaxError([self.previous().line, f"Declaration missing an identifier, got '{self.peek().lexeme}' instead"])
 
         name = self.previous().literal
-        
+
         # Now match a colon
         if not self.match([TT.COLON]):
             raise SyntaxError([self.previous().line, f"Declaration missing ':', got '{self.peek().lexeme}' instead"])                   
@@ -81,11 +80,16 @@ class Parser:
                 start = self.primary(line) # start index
 
                 if type(start.expression) != int:
-                    raise SyntaxError([self.previous().line, f"ARRAY declaration start index needs to be an integer'"])
+                    raise SyntaxError(
+                        [
+                            self.previous().line,
+                            "ARRAY declaration start index needs to be an integer'",
+                        ]
+                    )
 
                 if not self.match([TT.COLON]):
                     raise SyntaxError([self.previous().line, f"ARRAY declaration missing ':', got '{self.peek().lexeme}"])
-                                
+
                 end = self.expression(line)
 
                 # if type(end.expression) != int:
@@ -94,7 +98,7 @@ class Parser:
                 # dimensions.append( (start.expression, end.expression) )
                 dimensions.append( (start, end) )
 
-                if not self.peek().type == TT.COMMA:
+                if self.peek().type != TT.COMMA:
                     break
                 else:
                     self.advance()
@@ -112,24 +116,24 @@ class Parser:
             # Now get they type of the Variable
             if self.match([TT.IDENTIFIER]): # Array of User defined types
                 token = self.previous()
-                return DECLARE_ARRAY(name+":"+token.lexeme, dimensions, token.type, line)
-                
+                return DECLARE_ARRAY(f"{name}:{token.lexeme}", dimensions, token.type, line)
+
             elif self.match([TT.INTEGER, TT.REAL, TT.STRING, TT.BOOLEAN, TT.CHAR]):
                 return DECLARE_ARRAY(name, dimensions, self.previous().type, line)
-                
+
             else:
                 raise SyntaxError([self.previous().line, f"ARRAY declaration missing valid type, got '{self.peek().lexeme}', expected INTEGER, REAL, STRING, BOOLEAN, CHAR"])
 
         elif self.match([TT.INTEGER, TT.REAL, TT.STRING, TT.BOOLEAN, TT.CHAR]) :
-            
+
             return DECLARE(name, self.previous().type, line, False)
 
         else: # It must be a User Defined Type
             self.advance()
 
             token = self.previous()
-            
-            return DECLARE(name+":"+token.lexeme, token.type, line, False)
+
+            return DECLARE(f"{name}:{token.lexeme}", token.type, line, False)
 
             
     def function_decl_stmt(self, line):
@@ -194,14 +198,14 @@ class Parser:
         if self.match([TT.RIGHT_BRACK]):
             if self.match([TT.ASSIGN]):
                 expr = self.expression(line)
-                
+
                 return ARRAY_ASSIGN(name, indices, expr, line)
 
             else:
-                SyntaxError([line, f"Missing '<-' while parsing for array assignment"])
+                SyntaxError([line, "Missing '<-' while parsing for array assignment"])
 
         else:
-            raise SyntaxError([line, f"Unable to match ']' for array assignment"])
+            raise SyntaxError([line, "Unable to match ']' for array assignment"])
 
     def assign_stmt(self, name, line):
 
@@ -239,8 +243,10 @@ class Parser:
 
         if len(expr_list) == 0: 
             # Missing expression for PRINT
-            raise SyntaxError([self.previous().line, f"Missing expression for PRINT or OUTPUT"] )
-        
+            raise SyntaxError(
+                [self.previous().line, "Missing expression for PRINT or OUTPUT"]
+            )
+
         return PRINT (expr_list, line) 
 
     def input_stmt(self, line):
@@ -249,11 +255,10 @@ class Parser:
         identifier needs to be pre-declared.
         '''
 
-        if self.match([TT.IDENTIFIER]):
-            name = self.previous().literal
-            return INPUT (name, line)
-        else:
-            raise SyntaxError([self.previous().line, f"Missing identifier for INPUT"] )
+        if not self.match([TT.IDENTIFIER]):
+            raise SyntaxError([self.previous().line, "Missing identifier for INPUT"])
+        name = self.previous().literal
+        return INPUT (name, line)
 
 
     def stmt_block(self, block_terminator, line):
@@ -280,7 +285,7 @@ class Parser:
             raise SyntaxError([line, f"Unexpected EOF while looking for '{block_terminator}'"] )
 
         # Syntax error, we didn't find any statements
-        if len(stmt_list) == 0:
+        if not stmt_list:
             raise SyntaxError([line, "Empty statement block"])
 
         return stmt_list
@@ -291,13 +296,11 @@ class Parser:
         if not self.match([TT.THEN]):
             raise SyntaxError([self.peek().line, f"Expected 'THEN' got '{self.peek().lexeme}'"])
 
-        else:
-            stmt_list = self.stmt_block([TT.ENDIF, TT.ELSE], line)
-            if self.previous().type == TT.ELSE:
-                else_stmt_list = self.stmt_block([TT.ENDIF], line)
-                return IF_ELSE (expr, stmt_list, else_stmt_list, line)
-            else:
-                return IF (expr, stmt_list, line)
+        stmt_list = self.stmt_block([TT.ENDIF, TT.ELSE], line)
+        if self.previous().type != TT.ELSE:
+            return IF (expr, stmt_list, line)
+        else_stmt_list = self.stmt_block([TT.ENDIF], line)
+        return IF_ELSE (expr, stmt_list, else_stmt_list, line)
 
     def case_stmt(self, line):
         
@@ -312,22 +315,22 @@ class Parser:
             
              # allow an empty expression to check for OTHERWISE
             value = self.expression(line, checkNone=False)
-            if value == None:
+            if value is None:
                 if self.peek().type != TT.OTHERWISE:
                     raise SyntaxError([line, "Missing expression while parsing CASE"])
                 else:
                     self.match([TT.OTHERWISE]);
-            
+
             if not self.match([TT.COLON]):
                 raise SyntaxError([self.peek().line, f"expected a : got '{self.peek().lexeme}'"])
 
             stmt_list = self.stmt_block([TT.BREAK], line)
 
-            if value == None and self.peek().type != TT.ENDCASE:
+            if value is None and self.peek().type != TT.ENDCASE:
                 raise SyntaxError([line, "OTHERWISE should be the last CASE value"])
-                
+
             cases.append((value, stmt_list))
-        
+
         return CASE(expr, cases, line)
     
     def while_stmt(self, line):
@@ -335,13 +338,11 @@ class Parser:
         # Get the condition        
         expr = self.expression(self.previous().line)
 
-        # Now match DO
         if not self.match([TT.DO]):
             raise SyntaxError([self.peek().line, f"Syntax: expected 'DO' got '{self.peek().lexeme}'"])
 
-        else:            
-            stmt_list = self.stmt_block([TT.ENDWHILE], line)
-            return WHILE (expr, stmt_list, line)
+        stmt_list = self.stmt_block([TT.ENDWHILE], line)
+        return WHILE (expr, stmt_list, line)
 
 
     def repeat_stmt(self, line):
@@ -383,8 +384,8 @@ class Parser:
 
             # try and match a comma
             self.match([TT.COMMA])
-        
-        raise SyntaxError(line, f"Unexpected EOF while parsing parameter list")
+
+        raise SyntaxError(line, "Unexpected EOF while parsing parameter list")
 
     def call_stmt(self, line):
 
@@ -428,8 +429,8 @@ class Parser:
 
         value = self.primary(line)
 
-        if value == None:
-            raise SyntaxError([line, f"CONSTANT missing a value"])
+        if value is None:
+            raise SyntaxError([line, "CONSTANT missing a value"])
 
         value = value.expression
 
@@ -447,7 +448,7 @@ class Parser:
             vtype = TT.INTEGER
 
         else:
-            raise SyntaxError([line, f"CONSTANT doesn't recognise value type"])
+            raise SyntaxError([line, "CONSTANT doesn't recognise value type"])
 
         return DECLARE(name, vtype, line, True, value)
 
@@ -455,7 +456,7 @@ class Parser:
     def for_stmt(self, line): # CONSTANT <identifier> = <value>
 
         assign = None
-        
+
         # now match an identifier
         if self.match([TT.IDENTIFIER]):
 
@@ -463,35 +464,30 @@ class Parser:
             if self.match([TT.ASSIGN]):
                 assign = self.assign_stmt(name, line) # e.g. I <- 1
             else:
-                raise SyntaxError([line, f"FOR Missing '<-'"])
+                raise SyntaxError([line, "FOR Missing '<-'"])
 
         if not isinstance(assign, ASSIGN):
-            raise SyntaxError([line, f"Missing 'identifier <- expression'"])
+            raise SyntaxError([line, "Missing 'identifier <- expression'"])
+
+        if not self.match([TT.TO]):
+            raise SyntaxError([line, f"Expected TO, got '{self.peek().lexeme}'"])
+
+        end = self.expression(self.previous().line)
+
+        if end is None:
+            raise SyntaxError([line, "end expression missing after TO"])
+
+        step = self.expression(self.previous().line) if self.match([TT.STEP]) else None
+        # Get statement block
+        stmt_list = self.stmt_block([TT.NEXT], line)
+
+        if not self.match([TT.NEXT]) and not self.match([TT.IDENTIFIER]):
+            raise SyntaxError(
+                [self.previous().line, "Expected NEXT followed by an Identifier"]
+            )
 
         else:
-
-            if not self.match([TT.TO]):
-                raise SyntaxError([line, f"Expected TO, got '{self.peek().lexeme}'"])
-
-            else:
-                end = self.expression(self.previous().line)
-
-                if end == None:
-                    raise SyntaxError([line, "end expression missing after TO"])
-                    
-                # Check if we have a 'STEP' keyword - this is optional
-                step = None
-                if self.match([TT.STEP]):
-                    step = self.expression(self.previous().line)
-
-                # Get statement block
-                stmt_list = self.stmt_block([TT.NEXT], line)
-
-                if not self.match([TT.NEXT]) and not self.match([TT.IDENTIFIER]):
-                    raise SyntaxError([self.previous().line, f"Expected NEXT followed by an Identifier"])
-
-                else:
-                    return FOR (assign, end, step, stmt_list, line)
+            return FOR (assign, end, step, stmt_list, line)
 
     def return_stmt(self, line):
         return RETURN (self.expression(line, checkNone=False))
@@ -502,7 +498,7 @@ class Parser:
             expr = self.expression(line)
 
             if not self.match([TT.FOR]):
-                raise SyntaxError([line, f"Missing FOR for OPENFILE"])                 
+                raise SyntaxError([line, "Missing FOR for OPENFILE"])
             if not self.match([TT.READ, TT.WRITE, TT.APPEND]):
                 raise SyntaxError([line, f"Invalid file mode {self.peek().literal}"])
 
@@ -515,7 +511,7 @@ class Parser:
 
         elif self.previous().type == TT.READFILE:
             file_id = self.expression(line)
-                          
+
             if not self.match([TT.COMMA]):
                 raise SyntaxError([line, f"READFILE: expected a comma after the file id - got {self.peek().literal}"])
 
@@ -526,7 +522,7 @@ class Parser:
 
         elif self.previous().type == TT.WRITEFILE:
             file_id = self.expression(line)
-         
+
             if not self.match([TT.COMMA]):
                 raise SyntaxError([line, f"Expected a comma after the file id - got {self.peek().literal}"])
 
@@ -552,25 +548,23 @@ class Parser:
                 value = []
 
                 return DECLARE_TYPE (name, DECLARE_TYPE.TYPE.ENUM, value, line)
-                
+
             elif self.match([TT.CAP]): # Pointer type found
                 value = None
                 return DECLARE_TYPE (name, DECLARE_TYPE.TYPE.POINTER, value, line)    
-                
+
             else:
                 raise SyntaxError([line, f"unknown type {name} declared"])
-            
+
         elif self.match([TT.DECLARE]): # Composite
 
-            value = []
-            
-            value.append(self.declaration_stmt(line))
+            value = [self.declaration_stmt(line)]
 
             while not self.match([TT.ENDTYPE]):
-                
+
                 if self.match([TT.DECLARE]):
                     value.append(self.declaration_stmt(line))
-                    
+
                 else:
                     raise SyntaxError([line, f"TYPE unexpected DECLARE, got {self.peek().literal} instead"])     
 
@@ -588,7 +582,7 @@ class Parser:
         elif self.match([TT.IDENTIFIER]):
 
             name = self.previous().literal
-            
+
             if self.match([TT.ASSIGN]):
                 return self.assign_stmt(name, self.previous().line)
 
@@ -596,13 +590,13 @@ class Parser:
 
                 if not self.match([TT.IDENTIFIER]):
                     raise SyntaxError([self.peek().line, f"expected identifier after '.', got {self.peek().type}"])
-                dotname = name+"."+self.previous().lexeme
+                dotname = f"{name}.{self.previous().lexeme}"
 
                 if not self.match([TT.ASSIGN]):
                     raise SyntaxError([self.peek().line, f"expected <- after composite name, got  {self.peek().type}"])
-                
+
                 return self.assign_stmt(dotname, self.previous().line)
-                    
+
             elif self.match([TT.LEFT_BRACK]):
                 return self.array_assign_stmt(name, self.previous().line)
 
@@ -629,7 +623,7 @@ class Parser:
 
         elif self.match([TT.CASE]):
             return self.case_stmt(self.previous().line)
-        
+
         elif self.match([TT.WHILE]):
             return self.while_stmt(self.previous().line)
 
@@ -644,7 +638,7 @@ class Parser:
 
         elif self.match([TT.PROCEDURE]):
             return self.procedure_decl_stmt(self.previous().line)
-            
+
         elif self.match([TT.RETURN]):
             return self.return_stmt(self.previous().line)
 
@@ -653,14 +647,14 @@ class Parser:
 
         elif self.match([TT.BREAK]):
             print("Got Break")
-            
+
         else:
             self.advance()
             raise SyntaxError([self.previous().line, f"Unexpected token '{self.previous().lexeme}'"])
 
     def expression(self, line, checkNone=True):
         expr = self.bool_or(line)
-        if checkNone and expr == None:
+        if checkNone and expr is None:
             raise SyntaxError([line, "missing expression"])
         return expr
 
@@ -749,21 +743,21 @@ class Parser:
                 args = self.expr_list(line)
 
                 if not self.match([TT.RIGHT_PAREN]):
-                    raise SyntaxError([line, f"function missing closing ')' "])
+                    raise SyntaxError([line, "function missing closing ')' "])
 
                 return FUNCTION (name, args, line)
 
             elif self.match([TT.LEFT_BRACK]): # check if it's an array identifier
                 index = self.expr_list(line)
-                
+
                 if self.match([TT.RIGHT_BRACK]):
                     return ARRAY(name, index, line)
                 else:
                     raise SyntaxError(line, f"array {name} missing ']'")
             elif self.match([TT.DOT]): # check if it's a composite name
                 if not self.match([TT.IDENTIFIER]):
-                    raise SyntaxError(line, f"composite name missing field name after '.'")
-                return IDENTIFIER(name+"."+self.previous().lexeme, line) 
+                    raise SyntaxError(line, "composite name missing field name after '.'")
+                return IDENTIFIER(f"{name}.{self.previous().lexeme}", line)
             else:
                 # check if name is a function without arguments
                 return IDENTIFIER(name, line)

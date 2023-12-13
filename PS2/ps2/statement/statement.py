@@ -63,12 +63,12 @@ class DECLARE ( Statement ):
 
         if self.vtype == TT.IDENTIFIER: # composite type delcared
             userType = environ.get_variable(self.utype)
-            if userType == None:
+            if userType is None:
                 raise SyntaxError([self.line, f"User defined type '{self.vtype.lexeme}' undefined"])
 
             # Now iterate through list of declares and setup variable in symbol table
             for i, s in enumerate(userType.value):
-                name = self.vname+"."+s.vname
+                name = f"{self.vname}.{s.vname}"
                 stype = s.vtype
                 symbol = Symbol(name, stype, i, self.line)
                 environ.add_variable(symbol)
@@ -112,12 +112,17 @@ class DECLARE_ARRAY ( Statement ):
             end =   await self.dimensions[0][1].evaluate()
 
             if start > end or start < 0:
-                raise RuntimeError([self.line, f"ARRAY declaration start index > end index or start index < 0"])
+                raise RuntimeError(
+                    [
+                        self.line,
+                        "ARRAY declaration start index > end index or start index < 0",
+                    ]
+                )
 
             # Re-write the original parsed values with actual runtime values
             self.dimensions = [(start, end)]
 
-            if self.utype == None:
+            if self.utype is None:
                 value = [ None for _ in range( end - start + 1) ]
             else:
                 raise RuntimeError([self.line, "Array of UDT not implemented yet"])
@@ -128,7 +133,12 @@ class DECLARE_ARRAY ( Statement ):
             end1 =   await self.dimensions[0][1].evaluate()
 
             if start1 > end1 or start1 < 0:
-                raise RuntimeError([self.line, f"ARRAY declaration start index > end index or start index < 0"])
+                raise RuntimeError(
+                    [
+                        self.line,
+                        "ARRAY declaration start index > end index or start index < 0",
+                    ]
+                )
 
             value = [ None for _ in range( end1- start1 + 1) ]
 
@@ -136,7 +146,12 @@ class DECLARE_ARRAY ( Statement ):
             end2 =   await self.dimensions[1][1].evaluate()
 
             if start2 > end2 or start2 < 0:
-                raise RuntimeError([self.line, f"ARRAY declaration start index > end index or start index < 0"])
+                raise RuntimeError(
+                    [
+                        self.line,
+                        "ARRAY declaration start index > end index or start index < 0",
+                    ]
+                )
 
             # Re-write the original parsed values with actual runtime values
             self.dimensions = [(start1, end1),(start2, end2)]
@@ -260,7 +275,7 @@ class PRINT ( Statement ):
 
             value = await expr.evaluate()
 
-            if value == None:
+            if value is None:
                 raise RuntimeError([self.line, "No expression to print"])
 
             if type(value) is bool: # Ensure Python True and False are in uppercase
@@ -432,8 +447,6 @@ class IF_ELSE ( Statement ):
             for stmt in self.statement_list:
                 await stmt.interpret()
 
-            environ.pop() # pop scope
-
         else:
 
             environ.push({}) # push new scope to stack
@@ -441,7 +454,8 @@ class IF_ELSE ( Statement ):
             for stmt in self.else_statement_list:
                 await stmt.interpret()
 
-            environ.pop() # pop scope
+
+        environ.pop() # pop scope
 
 class CASE ( Statement ):
 
@@ -532,42 +546,40 @@ class CALL ( Statement ):
             else:
                 raise RuntimeError([self.line, f"Unrecognised DEBUG parameter {arg}"])
 
+        elif environ.symbol_defined(self.name): # Check if this is a user defined procedure:
+
+            symbol = environ.get_variable(self.name)
+
+            # Create a new environment scope for this function
+            environ.push({})
+
+            # Add the parameters to the environment
+            for i, s in enumerate(symbol.args):
+                id_name = symbol.args[i][0]
+                id_type = symbol.args[i][1]
+
+                # Evaluate the argument and check that it is the required type
+                arg = await self.args[i].evaluate()
+
+                if  util.check_type(arg, id_type, self.line) == False:
+                    raise RuntimeError([self.line, f"Procedure {self.name} with arg='{arg}' doesn't match type {id_type}"])
+
+                environ.add_variable(Symbol(id_name, id_type , arg, self.line))
+
+            try:
+
+                # Run the body of the procedure, until it returns or completes
+
+                for stmt in symbol.stmt_list:
+                    await stmt.interpret()
+
+                # Procedure has returned
+
+            except util.Return:
+                    pass
+
         else:
-            # Check if its a user defined call
-            if environ.symbol_defined(self.name): # Check if this is a user defined procedure:
-
-                symbol = environ.get_variable(self.name)
-
-                # Create a new environment scope for this function
-                environ.push({})
-
-                # Add the parameters to the environment
-                for i, s in enumerate(symbol.args):
-                    id_name = symbol.args[i][0]
-                    id_type = symbol.args[i][1]
-
-                    # Evaluate the argument and check that it is the required type
-                    arg = await self.args[i].evaluate()
-
-                    if  util.check_type(arg, id_type, self.line) == False:
-                        raise RuntimeError([self.line, f"Procedure {self.name} with arg='{arg}' doesn't match type {id_type}"])
-
-                    environ.add_variable(Symbol(id_name, id_type , arg, self.line))
-
-                try:
-
-                    # Run the body of the procedure, until it returns or completes
-
-                    for stmt in symbol.stmt_list:
-                        await stmt.interpret()
-
-                    # Procedure has returned
-
-                except util.Return:
-                        pass
-
-            else:
-                raise RuntimeError([self.line, f"Unrecognised procedure call '{self.name}'"])
+            raise RuntimeError([self.line, f"Unrecognised procedure call '{self.name}'"])
 
 
 class RETURN ( Statement ):
@@ -580,11 +592,7 @@ class RETURN ( Statement ):
 
     async def interpret(self):
 
-        # Use Python's exception mechanism to return from calling procedure / function
-        expr = None
-        if self.expr != None:
-            expr = await self.expr.evaluate()
-
+        expr = await self.expr.evaluate() if self.expr != None else None
         raise util.Return(expr)
 
 
